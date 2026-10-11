@@ -1,0 +1,102 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nss
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nss_dev_password}
+      POSTGRES_DB: nss
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nss -d nss"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "8025:8025"
+    expose:
+      - "1025"
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://nss:${POSTGRES_PASSWORD:-nss_dev_password}@db:5432/nss?schema=public
+      SESSION_SECRET: ${SESSION_SECRET:-local-only-change-this-session-secret-123456}
+      PUBLIC_ORIGIN: http://localhost:8080
+      MANAGE_ORIGIN: http://localhost:5173
+      COOKIE_SECURE: "false"
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      PRIVATE_MEDIA_ROOT: /data/private-media
+      PUBLIC_MEDIA_ROOT: /data/public-media
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/workspace
+      - media-data:/data
+      - api-node-modules:/workspace/node_modules
+    working_dir: /workspace
+    command: sh -c "npm run db:migrate && npm run dev:api"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://nss:${POSTGRES_PASSWORD:-nss_dev_password}@db:5432/nss?schema=public
+      SESSION_SECRET: ${SESSION_SECRET:-local-only-change-this-session-secret-123456}
+      PRIVATE_MEDIA_ROOT: /data/private-media
+      PUBLIC_MEDIA_ROOT: /data/public-media
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+    volumes:
+      - .:/workspace
+      - media-data:/data
+      - api-node-modules:/workspace/node_modules
+    working_dir: /workspace
+    command: npm run dev:worker
+    depends_on:
+      db:
+        condition: service_healthy
+
+  public:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - .:/usr/share/nginx/html:ro
+      - ./deploy/nginx/dev.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - admin-web
+
+  admin-web:
+    image: node:24-bookworm-slim
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/workspace
+      - root-node-modules:/workspace/node_modules
+    working_dir: /workspace
+    command: sh -c "npm install && npm run dev:web"
+    depends_on:
+      - api
+
+volumes:
+  postgres-data:
+  media-data:
+  api-node-modules:
+  root-node-modules:

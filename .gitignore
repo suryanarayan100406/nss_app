@@ -1,0 +1,26 @@
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+var/
+apps/admin-web/.vite/
+playwright-report/
+test-results/
+
+# Scratch files
+2.html
+*.zip
+*.pdf
+
+# Python / pytest artefacts
+__pycache__/
+*.py[cod]
+.pytest_cache/

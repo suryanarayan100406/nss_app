@@ -1,0 +1,463 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  APPROVER
+  ADMIN
+}
+
+enum TokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+enum EventStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+enum RevisionStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MediaStatus {
+  PRIVATE
+  PUBLIC
+  REMOVED
+}
+
+enum PhotoStatus {
+  UPLOADING
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  REMOVAL_REQUESTED
+  REMOVED
+}
+
+enum ModerationDecisionType {
+  APPROVED
+  REJECTED
+  REMOVAL_APPROVED
+  REMOVAL_REJECTED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  displayName          String
+  passwordHash         String
+  role                 Role                  @default(USER)
+  emailVerifiedAt      DateTime?
+  disabledAt           DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  sessions             Session[]
+  emailTokens          EmailToken[]
+  media                MediaAsset[]          @relation("CreatedMedia")
+  revisions            SiteRevision[]        @relation("RevisionAuthor")
+  submissions          PhotoSubmission[]
+  decisions            ModerationDecision[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  jobsCreated          ScheduledJob[]        @relation("JobCreator")
+  teamMembersCreated   TeamMember[]          @relation("TeamCreator")
+  photoRemovalRequests PhotoRemovalRequest[]
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model EmailToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  type      TokenType
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, type, expiresAt])
+}
+
+model AcademicYear {
+  id        String             @id @default(cuid())
+  label     String             @unique
+  slug      String             @unique
+  startsOn  DateTime
+  endsOn    DateTime
+  isCurrent Boolean            @default(false)
+  published Boolean            @default(true)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  events    Event[]
+  rosters   RosterMembership[]
+
+  @@index([startsOn, endsOn])
+}
+
+model MediaAsset {
+  id             String             @id @default(cuid())
+  storageKey     String             @unique
+  publicKey      String?            @unique
+  originalName   String
+  mimeType       String
+  kind           String             @default("image")
+  sizeBytes      Int
+  width          Int?
+  height         Int?
+  sha256         String
+  dHash          String?
+  altText        String             @default("")
+  caption        String             @default("")
+  status         MediaStatus        @default(PRIVATE)
+  source         String             @default("upload")
+  createdById    String?
+  createdBy      User?              @relation("CreatedMedia", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  coverFor       Event[]            @relation("EventCover")
+  openGraphFor   Event[]            @relation("EventOpenGraph")
+  galleryItems   EventGalleryItem[]
+  teamPhotos     TeamMember[]
+  directorPhotos DirectorMessage[]
+  submissions    PhotoSubmission[]
+
+  @@index([sha256])
+  @@index([status, createdAt])
+}
+
+model Event {
+  id                         String             @id @default(cuid())
+  slug                       String             @unique
+  legacyPath                 String?            @unique
+  dateLabel                  String?
+  dateOnly                   Boolean            @default(false)
+  draft                      Json?
+  deletedAt                  DateTime?
+  galleryReleaseAt           DateTime?
+  registrationOpensAt        DateTime?
+  registrationClosesAt       DateTime?
+  title                      String
+  summary                    String
+  description                String
+  category                   String
+  tags                       String[]
+  coverMediaId               String?
+  coverMedia                 MediaAsset?        @relation("EventCover", fields: [coverMediaId], references: [id], onDelete: SetNull)
+  startAt                    DateTime
+  endAt                      DateTime?
+  timezone                   String             @default("Asia/Kolkata")
+  venue                      String
+  mapUrl                     String?
+  organizer                  String
+  collaboratingOrganizations String
+  coordinators               String
+  registrationUrl            String?
+  socialUrls                 Json?
+  reportUrl                  String?
+  status                     EventStatus        @default(DRAFT)
+  visibility                 Visibility         @default(PRIVATE)
+  featured                   Boolean            @default(false)
+  displayOrder               Int                @default(0)
+  uploadOpensAt              DateTime?
+  uploadClosesAt             DateTime?
+  publicAt                   DateTime?
+  seoTitle                   String?
+  seoDescription             String?
+  canonicalPath              String?
+  openGraphMediaId           String?
+  openGraphMedia             MediaAsset?        @relation("EventOpenGraph", fields: [openGraphMediaId], references: [id], onDelete: SetNull)
+  academicYearId             String?
+  academicYear               AcademicYear?      @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  gallery                    EventGalleryItem[]
+  participants               EventParticipant[]
+  submissions                PhotoSubmission[]
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  @@index([status, visibility, startAt])
+  @@index([featured, displayOrder])
+  @@index([academicYearId, startAt])
+}
+
+model EventGalleryItem {
+  id           String     @id @default(cuid())
+  eventId      String
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  mediaId      String
+  media        MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  caption      String     @default("")
+  credit       String     @default("")
+  altText      String     @default("")
+  displayOrder Int        @default(0)
+  publishedAt  DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@unique([eventId, mediaId])
+  @@index([eventId, publishedAt, displayOrder])
+}
+
+model EventParticipant {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name         String
+  rollNo       String?
+  role         String
+  department   String
+  batch        String
+  contribution String
+  attendance   String   @default("present")
+  sourceKey    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([eventId, sourceKey])
+  @@index([eventId, name])
+}
+
+model TeamCategory {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  slug      String       @unique
+  createdAt DateTime     @default(now())
+  members   TeamMember[]
+}
+
+model TeamMember {
+  id            String             @id @default(cuid())
+  fullName      String
+  sourceKey     String?            @unique
+  designation   String
+  batchYear     String?
+  biography     String?
+  email         String?
+  phone         String?
+  socialLinks   Json?
+  photoMediaId  String?
+  photoMedia    MediaAsset?        @relation(fields: [photoMediaId], references: [id], onDelete: SetNull)
+  categoryId    String
+  category      TeamCategory       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  displayOrder  Int                @default(0)
+  featured      Boolean            @default(false)
+  active        Boolean            @default(true)
+  publicVisible Boolean            @default(true)
+  showEmail     Boolean            @default(false)
+  showPhone     Boolean            @default(false)
+  createdById   String?
+  createdBy     User?              @relation("TeamCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  rosters       RosterMembership[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([active, publicVisible, featured, displayOrder])
+}
+
+model RosterMembership {
+  id             String       @id @default(cuid())
+  memberId       String
+  member         TeamMember   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  designation    String
+  displayOrder   Int          @default(0)
+  featured       Boolean      @default(false)
+
+  @@unique([memberId, academicYearId])
+  @@index([academicYearId, displayOrder])
+}
+
+model SiteRevision {
+  id          String         @id @default(cuid())
+  key         String
+  version     Int
+  status      RevisionStatus @default(DRAFT)
+  content     Json
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  createdById String?
+  createdBy   User?          @relation("RevisionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
+
+  @@unique([key, version])
+  @@index([key, status, scheduledAt])
+}
+
+model ImpactMetric {
+  id           String   @id @default(cuid())
+  number       Int
+  label        String
+  suffix       String   @default("")
+  progress     Float?
+  displayOrder Int      @default(0)
+  visible      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([visible, displayOrder])
+}
+
+model DirectorMessage {
+  id          String      @id @default(cuid())
+  name        String
+  designation String
+  text        String
+  portraitId  String?
+  portrait    MediaAsset? @relation(fields: [portraitId], references: [id], onDelete: SetNull)
+  visible     Boolean     @default(true)
+  updatedAt   DateTime    @updatedAt
+}
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model PhotoSubmission {
+  id                 String                @id @default(cuid())
+  eventId            String
+  event              Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contributorId      String
+  contributor        User                  @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  mediaId            String
+  media              MediaAsset            @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  clientSubmissionId String                @unique
+  sha256             String
+  dHash              String?
+  status             PhotoStatus           @default(PENDING_REVIEW)
+  qualityWarnings    Json?
+  duplicateWarning   String?
+  consentConfirmed   Boolean
+  creditRequested    Boolean               @default(false)
+  rejectionReason    String?
+  submittedAt        DateTime              @default(now())
+  publishedAt        DateTime?
+  removedAt          DateTime?
+  duplicateOfId      String?
+  duplicateOf        PhotoSubmission?      @relation("ExactDuplicate", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates         PhotoSubmission[]     @relation("ExactDuplicate")
+  decisions          ModerationDecision[]
+  removalRequests    PhotoRemovalRequest[]
+
+  @@unique([eventId, sha256])
+  @@index([eventId, status, submittedAt])
+  @@index([contributorId, submittedAt])
+}
+
+model ModerationDecision {
+  id           String                 @id @default(cuid())
+  submissionId String
+  submission   PhotoSubmission        @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  reviewerId   String
+  reviewer     User                   @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
+  decision     ModerationDecisionType
+  reason       String?
+  createdAt    DateTime               @default(now())
+
+  @@index([submissionId, createdAt])
+}
+
+model PhotoRemovalRequest {
+  id           String          @id @default(cuid())
+  submissionId String
+  submission   PhotoSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  requesterId  String
+  requester    User            @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  reason       String
+  status       String          @default("pending")
+  reviewedById String?
+  createdAt    DateTime        @default(now())
+  reviewedAt   DateTime?
+
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+model ScheduledJob {
+  id          String    @id @default(cuid())
+  key         String    @unique
+  type        String
+  payload     Json
+  runAt       DateTime
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  lockedAt    DateTime?
+  lastError   String?
+  createdById String?
+  createdBy   User?     @relation("JobCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  objectType String
+  objectId   String
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([objectType, objectId, createdAt])
+  @@index([actorId, createdAt])
+}

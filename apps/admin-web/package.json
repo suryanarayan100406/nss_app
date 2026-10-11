@@ -1,0 +1,28 @@
+{
+  "name": "@nss/admin-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --ext .ts,.tsx",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.545.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.4",
+    "vite": "^7.1.9"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.1",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "eslint": "^9.37.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript": "^5.9.2"
+  }
+}

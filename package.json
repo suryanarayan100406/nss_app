@@ -1,0 +1,59 @@
+{
+  "name": "nss-iiitnr-platform",
+  "private": true,
+  "workspaces": [
+    "apps/api",
+    "apps/admin-web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/admin-web run dev",
+    "start:api": "npm --workspace apps/api run start",
+    "start:worker": "npm --workspace apps/api run start:worker",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "npm --workspace apps/api run build",
+    "build:web": "npm --workspace apps/admin-web run build",
+    "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "typecheck:api": "npm --workspace apps/api run typecheck",
+    "typecheck:web": "npm --workspace apps/admin-web run typecheck",
+    "lint": "npm run lint:api && npm run lint:web",
+    "lint:api": "npm --workspace apps/api run lint",
+    "lint:web": "npm --workspace apps/admin-web run lint",
+    "test": "npm --workspace apps/api run test",
+    "db:migrate": "npm --workspace apps/api run prisma:migrate",
+    "db:seed": "npm --workspace apps/api run seed",
+    "db:admin": "npm --workspace apps/api run create-admin",
+    "import:static": "npm --workspace apps/api run import-static",
+    "test:e2e": "npm --workspace apps/admin-web run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/cors": "^2.8.19",
+    "@types/supertest": "^7.2.1",
+    "@typescript-eslint/eslint-plugin": "^8.71.1",
+    "@typescript-eslint/parser": "^8.71.1",
+    "concurrently": "^9.1.2",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "prisma": "^6.19.3",
+    "supertest": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0"
+  },
+  "allowScripts": {
+    "@prisma/client": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "argon2": true,
+    "sharp": true,
+    "esbuild": true,
+    "@embedded-postgres/linux-x64@18.4.0-beta.17": true
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2"
+  }
+}

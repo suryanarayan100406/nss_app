@@ -1,0 +1,33 @@
+import fs from 'node:fs/promises';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { pinoHttp } from 'pino-http';
+import { config } from './config.js';
+import { logger } from './logger.js';
+import { apiRouter } from './routes.js';
+import { errorHandler, notFound } from './errors.js';
+import { siteRouter } from './public-site.js';
+
+await fs.mkdir(config.PRIVATE_MEDIA_ROOT, { recursive: true });
+await fs.mkdir(config.PUBLIC_MEDIA_ROOT, { recursive: true });
+
+export const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.get('/health', (_req, res) => res.json({ ok: true, service: 'nss-api', timestamp: new Date().toISOString() }));
+app.get('/ready', async (_req, res) => { try { const { prisma } = await import('./db.js'); await prisma.$queryRaw`SELECT 1`; res.json({ ok: true, database: 'ready' }); } catch { res.status(503).json({ ok: false, database: 'unavailable' }); } });
+app.use(pinoHttp({ logger }));
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' }, contentSecurityPolicy: false }));
+app.use(cors({ origin: [config.PUBLIC_ORIGIN, config.MANAGE_ORIGIN], credentials: true, methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'X-CSRF-Token'] }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+app.use(cookieParser());
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }));
+app.use('/api/v1', apiRouter);
+app.use('/', siteRouter);
+app.use('/media', express.static(config.PUBLIC_MEDIA_ROOT, { fallthrough: false, index: false, maxAge: '1h', immutable: false }));
+app.use(notFound);
+app.use(errorHandler);
