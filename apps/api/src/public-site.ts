@@ -5,8 +5,8 @@ import { load, type CheerioAPI } from 'cheerio';
 import { prisma } from './db.js';
 import { config } from './config.js';
 import { attachUser } from './auth.js';
-import { bindings, homepageSchema, type Homepage, type BindingKey } from './content-schema.js';
-import { publicEventWhere } from './policy.js';
+import { bindings, homepageSchema, parseHomepageContent, type Homepage, type BindingKey } from './content-schema.js';
+import { publicEventDetailWhere } from './policy.js';
 import { HttpError } from './errors.js';
 import { publicPath } from './media.js';
 import type { Event, EventStatus } from '@prisma/client';
@@ -19,13 +19,38 @@ const liveEventWhere = { visibility: 'PUBLIC' as const, deletedAt: null, status:
 const date = (event: Event) => event.dateLabel || new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', ...(event.dateOnly ? {} : { timeStyle: 'short' }), timeZone: event.timezone }).format(event.startAt);
 const include = { coverMedia: true, gallery: { where: { publishedAt: { not: null }, media: { status: 'PUBLIC' as const } }, include: { media: true }, orderBy: { displayOrder: 'asc' as const }, take: 100 }, participants: true } as const;
 
+async function sendStaticFallback(file: string, res: express.Response) {
+  const safe = path.resolve(config.SITE_ROOT, file);
+  if (!safe.startsWith(`${config.SITE_ROOT}${path.sep}`)) throw new HttpError(404, 'NOT_FOUND', 'The requested page was not found.');
+  res.set('Cache-Control', 'no-store').type('html').send(await fs.readFile(safe, 'utf8'));
+}
+
+function fallbackFile(requestPath: string) {
+  if (requestPath === '/' || requestPath === '/index.html') return 'index.html';
+  if (requestPath === '/team.html') return 'team.html';
+  if (requestPath === '/event.html') return 'event.html';
+  if (/^\/event(?:-[a-z-]+)?\.html$/.test(requestPath)) return requestPath.slice(1);
+  return null;
+}
+
 function titleLines($: CheerioAPI, selector: string, value: string) {
   $(selector).html(value.split('\n').map((line) => `<span class="line"><span>${esc(line)}</span></span>`).join(''));
 }
 async function currentHome() {
   const rev = await prisma.siteRevision.findFirst({ where: { key: 'homepage', status: 'PUBLISHED' }, orderBy: { version: 'desc' } });
   if (!rev) throw new HttpError(503, 'IMPORT_REQUIRED', 'The content import has not run yet.');
-  return homepageSchema.parse(rev.content);
+  const [metrics, director] = await Promise.all([
+    prisma.impactMetric.findMany({ orderBy: { displayOrder: 'asc' } }),
+    prisma.directorMessage.findFirst({ where: { visible: true } }),
+  ]);
+  const parsed = parseHomepageContent(rev.content);
+  const values = { ...parsed.values };
+  if (director) {
+    values['director.name'] = director.name;
+    values['director.designation'] = director.designation;
+    values['director.text'] = director.text;
+  }
+  return homepageSchema.parse({ ...parsed, values, metrics: metrics.length ? metrics.map(({ number, label, suffix, progress, visible }) => ({ number, label, suffix, progress, visible })) : parsed.metrics });
 }
 function globalContent($: CheerioAPI, home: Homepage, isHome: boolean) {
   for (const [key, value] of Object.entries(home.values)) {
@@ -90,7 +115,7 @@ siteRouter.get(['/','/index.html'], async (req, res, next) => { try {
   let preview: Homepage | undefined;
   if (req.query.preview) { if (req.user?.role !== 'ADMIN') throw new HttpError(403, 'FORBIDDEN', 'Admin preview only.'); const rev = await prisma.siteRevision.findUniqueOrThrow({ where: { id: String(req.query.preview) } }); preview = homepageSchema.parse(rev.content); }
   res.set('Cache-Control', 'no-store').type('html').send(await renderHome(preview));
-} catch (error) { next(error); } });
+} catch (error) { if (error instanceof HttpError && error.status < 500) return next(error); const file = fallbackFile(req.path); if (file) { try { await sendStaticFallback(file, res); } catch (fallbackError) { next(fallbackError); } } else next(error); } });
 
 siteRouter.get('/team.html', async (_req, res, next) => { try {
   const $ = load(await fs.readFile(path.join(config.SITE_ROOT, 'team.html'), 'utf8')); globalContent($, await currentHome(), false);
@@ -100,11 +125,11 @@ siteRouter.get('/team.html', async (_req, res, next) => { try {
   const targets = { 'Leadership & Guidance': '.team-leaders-grid:not(.senior-leaders-grid)', 'Core Members': '.team-core-grid', 'Student Volunteers': '.team-volunteers-grid', 'Senior Batch · 2024': '.senior-core-grid' };
   for (const [category, cards] of groups) { const target = targets[category as keyof typeof targets]; if (target) $(target).html(cards.map((m) => m.html).join('')).attr('data-ordered', 'true'); else $('#main').append(`<section class="team-core"><div class="wrap"><h2 class="section-title">${esc(category)}</h2><div class="team-core-grid" data-ordered="true">${cards.map((m) => m.html).join('')}</div></div></section>`); }
   res.set('Cache-Control','no-store').type('html').send($.html());
-} catch (error) { next(error); } });
+} catch { try { await sendStaticFallback('team.html', res); } catch (fallbackError) { next(fallbackError); } } });
 
 siteRouter.get(/^\/(?:event(?:-[a-z-]+)?\.html|events\/[a-z0-9-]+)$/, async (req, res, next) => { try {
   const preview = req.query.preview === '1' && req.user?.role === 'ADMIN';
-  const event = await prisma.event.findFirst({ where: { ...(req.path === '/event.html' ? { slug: String(req.query.slug || '') } : req.path.startsWith('/events/') ? { slug: req.path.slice(8) } : { legacyPath: req.path === '/event-template.html' ? '/event-blood-donation.html' : req.path }), ...(preview ? {} : publicEventWhere) }, include });
+   const event = await prisma.event.findFirst({ where: { ...(req.path === '/event.html' ? { slug: String(req.query.slug || '') } : req.path.startsWith('/events/') ? { slug: req.path.slice(8) } : { legacyPath: req.path === '/event-template.html' ? '/event-blood-donation.html' : req.path }), ...(preview ? { deletedAt: null } : publicEventDetailWhere) }, include });
   if (!event) throw new HttpError(404, 'EVENT_UNPUBLISHED', 'This event is not published.');
   const $ = load(await fs.readFile(path.join(config.SITE_ROOT, event.legacyPath?.slice(1) || 'event-template.html'), 'utf8'));
   globalContent($, await currentHome(), false);
@@ -118,23 +143,25 @@ siteRouter.get(/^\/(?:event(?:-[a-z-]+)?\.html|events\/[a-z0-9-]+)$/, async (req
   if (!event.legacyPath) { $('#marqueeTrack span').text(event.title); titleLines($, '#about .section-title', 'About this event'); $('.about-media').remove(); titleLines($, '#gallery .section-title', 'Published photographs'); $('.evp-meta li').eq(2).remove(); $('#about .eyebrow').text(event.category); $('#participants h2').text('Participants & organizers'); }
   $('.evp-links').empty();
   for (const url of Array.isArray(event.socialUrls) ? event.socialUrls : []) if (typeof url === 'string' && /^https?:/.test(url)) $('.evp-links').append(`<a href="${esc(url)}" rel="noopener">Event link ↗</a>`);
-  $('#heroActions').append(`<a class="btn-ghost" href="/manage/upload?event=${event.id}">Contribute photos</a><a class="btn-ghost" href="/api/v1/public/calendar/${event.slug}.ics">Download calendar</a>`);
+   $('#heroActions').append(`<a class="btn-ghost" href="/manage/upload?event=${esc(event.id)}">Contribute photos</a><a class="btn-ghost" href="/api/v1/public/events/${esc(event.slug)}.ics">Download calendar</a>`);
   $('.evp-grid').html(event.gallery.map((item) => `<figure><img src="${mediaLink(item.media.publicKey)}" alt="${esc(item.altText || item.media.altText)}" loading="lazy"><figcaption>${esc(item.caption)}${item.credit ? ` · ${esc(item.credit)}` : ''}</figcaption></figure>`).join(''));
   $('#evpTable thead tr').html(['#','Name','Roll No.','Role / Category','Department','Year / Batch','Contribution','Status'].map((h) => `<th scope="col">${h}</th>`).join(''));
   $('#evpBody').html(event.participants.map((p, i) => `<tr data-attendance="${esc(p.attendance.toLowerCase())}">${[i+1,p.name,p.rollNo || '—',p.role,p.department,p.batch,p.contribution,p.attendance].map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join(''));
   $('title').text(`${event.seoTitle || event.title} — NSS IIIT Naya Raipur`); $('meta[name="description"]').attr('content', event.seoDescription || event.summary);
   $('head').append(`<link rel="canonical" href="${esc(config.PUBLIC_ORIGIN + eventLink(event))}"><meta property="og:title" content="${esc(event.title)}"><meta property="og:description" content="${esc(event.summary)}">${event.coverMedia?.publicKey ? `<meta property="og:image" content="${esc(config.PUBLIC_ORIGIN + mediaLink(event.coverMedia.publicKey))}">` : ''}`);
   res.set('Cache-Control','no-store').type('html').send($.html());
-} catch (error) { next(error); } });
+} catch (error) { if (error instanceof HttpError && error.status < 500) return next(error); const file = fallbackFile(req.path); if (file) { try { await sendStaticFallback(file, res); } catch (fallbackError) { next(fallbackError); } } else next(error); } });
 
 // No filesystem static mount for derivatives: each request rechecks publication.
 siteRouter.get('/media/*key', async (req, res, next) => { try {
   const key = Array.isArray(req.params.key) ? req.params.key.join('/') : req.params.key;
   const baseKey = String(key).replace('-thumb.webp', '.webp');
   const media = await prisma.mediaAsset.findFirst({ where: { publicKey: baseKey, status: 'PUBLIC' }, include: { submissions: { include: { event: true } } } });
-  if (!media || media.submissions.some((s) => !['PUBLISHED','REMOVAL_REQUESTED'].includes(s.status) || !['PUBLISHED','ONGOING','COMPLETED','ARCHIVED','CANCELLED'].includes(s.event.status) || s.event.visibility !== 'PUBLIC' || s.event.deletedAt)) throw new HttpError(404, 'MEDIA_NOT_FOUND', 'Media is not published.');
+   const hasPublicSubmission = media?.submissions.some((s) => ['PUBLISHED', 'REMOVAL_REQUESTED'].includes(s.status) && ['PUBLISHED', 'ONGOING', 'COMPLETED', 'ARCHIVED', 'CANCELLED'].includes(s.event.status) && s.event.visibility === 'PUBLIC' && !s.event.deletedAt);
+   if (!media || (media.submissions.length > 0 && !hasPublicSubmission)) throw new HttpError(404, 'MEDIA_NOT_FOUND', 'Media is not published.');
   res.set('Cache-Control','no-store').type('image/webp').sendFile(publicPath(String(key)));
 } catch (error) { next(error); } });
 for (const folder of ['assets','css','js','vendor']) siteRouter.use(`/${folder}`, express.static(path.join(config.SITE_ROOT, folder), { index: false, dotfiles: 'deny' }));
+siteRouter.get(['/calendar.html', '/archives.html', '/archive.html'], (req, res) => res.sendFile(path.join(config.SITE_ROOT, req.path.slice(1))));
 siteRouter.use('/manage', express.static(path.join(config.SITE_ROOT, 'apps/admin-web/dist')));
 siteRouter.get('/manage/*path', (_req,res) => res.sendFile(path.join(config.SITE_ROOT,'apps/admin-web/dist/index.html')));

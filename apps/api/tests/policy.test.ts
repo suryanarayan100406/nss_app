@@ -33,6 +33,7 @@ describe('publication and archive policy', () => {
     expect(isPublicEvent({ status: 'DRAFT', visibility: 'PUBLIC' })).toBe(false);
     expect(isPublicEvent({ status: 'PUBLISHED', visibility: 'PUBLIC' })).toBe(true);
     expect(isPublicEvent({ status: 'ARCHIVED', visibility: 'PRIVATE' })).toBe(false);
+    expect(isPublicEvent({ status: 'PUBLISHED', visibility: 'PUBLIC', deletedAt: new Date() })).toBe(false);
   });
 
   it('prevents self-review while allowing an approver to review another contributor', () => {

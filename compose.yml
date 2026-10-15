@@ -91,6 +91,8 @@ services:
       - .:/workspace
       - root-node-modules:/workspace/node_modules
     working_dir: /workspace
+    environment:
+      VITE_PROXY_TARGET: http://api:4000
     command: sh -c "npm install && npm run dev:web"
     depends_on:
       - api

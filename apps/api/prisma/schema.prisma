@@ -82,6 +82,7 @@ model User {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   sessions             Session[]
+  mobileSessions       MobileSession[]
   emailTokens          EmailToken[]
   media                MediaAsset[]          @relation("CreatedMedia")
   revisions            SiteRevision[]        @relation("RevisionAuthor")
@@ -104,6 +105,25 @@ model Session {
   createdAt DateTime  @default(now())
 
   @@index([userId, expiresAt])
+}
+
+// Native clients use short-lived signed access tokens plus a rotating opaque
+// refresh token. Refresh tokens are never stored in plaintext.
+model MobileSession {
+  id             String    @id @default(cuid())
+  familyId       String
+  tokenHash      String    @unique
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  replacedByHash String?
+  lastUsedAt     DateTime?
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([familyId, revokedAt])
 }
 
 model EmailToken {

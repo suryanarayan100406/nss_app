@@ -1,4 +1,30 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academic Archives — NSS IIIT Naya Raipur</title><link rel="stylesheet" href="css/style.css"><style>.public-tool{min-height:100vh;background:var(--paper);padding:150px clamp(20px,7vw,100px) 100px}.public-tool h1{font:600 clamp(3rem,7vw,6rem)/.95 var(--font-display);letter-spacing:-.04em;max-width:11ch;margin:15px 0}.archive-public{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:60px;max-width:1000px}.archive-public a{border:1px solid var(--line-on-paper);padding:26px;min-height:190px;transition:transform .25s ease,background .25s ease}.archive-public a:hover{transform:translateY(-5px);background:var(--paper-2)}.archive-public h2{font:600 2rem var(--font-display);margin:12px 0 30px}.archive-public span:last-child{font-size:.8rem;color:var(--ink-on-paper-dim)}@media(max-width:700px){.archive-public{grid-template-columns:1fr}}
-</style></head><body><main class="public-tool"><span class="eyebrow">NSS / history</span><h1>Every year remains part of the work.</h1><p>Browse published events, galleries, reports, and rosters by academic year.</p><div class="archive-public" id="years"></div></main><script>
-(function(){var api=window.NSS_API_ROOT||(location.hostname==='localhost'&&location.port!=='4000'?'http://localhost:4000/api/v1':'/api/v1');fetch(api+'/public/academic-years').then(function(r){return r.json()}).then(function(body){document.getElementById('years').innerHTML=body.items.map(function(y){return '<a href="archive.html?year='+encodeURIComponent(y.slug)+'"><span class="eyebrow">Academic year</span><h2>'+y.label+'</h2><span>'+y.eventCount+' events · '+y.rosterCount+' roster links →</span></a>'}).join('')||'<p>No published academic years yet.</p>'}).catch(function(){document.getElementById('years').textContent='Archives are temporarily unavailable.'})})();
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0F1712">
+  <meta name="description" content="Browse NSS IIIT Naya Raipur's published academic archives.">
+  <title>Academic Archives — NSS IIIT Naya Raipur</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/public-pages.css">
+</head>
+<body class="public-page-body">
+  <a class="skip-link" href="#main">Skip to archives</a>
+  <header class="public-page-nav">
+    <a class="public-brand" href="index.html" aria-label="NSS IIIT Naya Raipur home">
+      <span class="public-brand-logos"><span class="public-emblem"><img src="assets/images/nss_logo.png" alt="NSS"></span><span class="public-emblem iiit"><img src="assets/images/iiit.png" alt="IIIT Naya Raipur"></span></span>
+      <span>NSS<small>IIIT Naya Raipur</small></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="index.html#about">About</a><a href="index.html#events">Events</a><a href="calendar.html">Calendar</a><a href="archives.html" aria-current="page">Archives</a><a href="team.html">Team</a><a href="index.html#join">Join us</a>
+    </nav>
+  </header>
+  <main class="public-tool" id="main">
+    <section class="public-tool-hero"><span class="eyebrow">NSS / history</span><h1>Every year remains part of the work.</h1><p>Browse published events, galleries, reports, and rosters by academic year.</p></section>
+    <section class="public-tool-body"><div class="public-tool-body-inner"><div class="archive-public" id="years" aria-live="polite"></div></div></section>
+  </main>
+  <footer class="public-page-footer"><a href="index.html">← Back to NSS IIIT Naya Raipur</a></footer>
+  <script src="js/public-data.js"></script>
+</body>
+</html>

@@ -17,3 +17,12 @@ test('management app exposes the sign-in form', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await expect(page.getByLabel('Institutional email')).toBeVisible();
 });
+
+test('management app exposes account recovery routes', async ({ page }) => {
+  const base = process.env.MANAGE_TEST_URL || 'http://localhost:5173';
+  await page.goto(`${base}/manage/forgot-password`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send reset link' })).toBeVisible();
+  await page.goto(`${base}/manage/reset-password?token=test-token`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+});

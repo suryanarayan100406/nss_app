@@ -120,6 +120,17 @@ export async function createPublicDerivative(storageKey: string, publicKey = `im
   return { publicKey, thumbKey };
 }
 
+export async function removePrivateUpload(storageKey: string) {
+  await fs.rm(privatePath(storageKey), { force: true }).catch(() => undefined);
+}
+
+export async function removePublicDerivative(publicKey: string) {
+  await Promise.all([
+    fs.rm(publicPath(publicKey), { force: true }).catch(() => undefined),
+    fs.rm(publicPath(publicKey.replace(/\.webp$/, '-thumb.webp')), { force: true }).catch(() => undefined),
+  ]);
+}
+
 export function privatePath(storageKey: string) {
   const resolved = path.resolve(config.PRIVATE_MEDIA_ROOT, storageKey);
   if (!resolved.startsWith(`${config.PRIVATE_MEDIA_ROOT}${path.sep}`)) throw new HttpError(400, 'INVALID_MEDIA_PATH', 'Invalid media path.');

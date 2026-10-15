@@ -1,4 +1,29 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academic Year — NSS IIIT Naya Raipur</title><link rel="stylesheet" href="css/style.css"><style>.public-tool{min-height:100vh;background:var(--paper);padding:150px clamp(20px,7vw,100px) 100px}.public-tool h1{font:600 clamp(3rem,7vw,6rem)/.95 var(--font-display);letter-spacing:-.04em;max-width:12ch;margin:15px 0}.archive-events{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:55px}.archive-event{border:1px solid var(--line-on-paper);padding:20px;background:rgba(255,255,255,.18)}.archive-event img{width:100%;aspect-ratio:4/3;object-fit:cover;margin-bottom:15px}.archive-event h2{font:600 1.35rem var(--font-display);margin:0 0 8px}.archive-event p{font-size:.78rem;color:var(--ink-on-paper-dim)}@media(max-width:750px){.archive-events{grid-template-columns:1fr 1fr}}@media(max-width:500px){.archive-events{grid-template-columns:1fr}}
-</style></head><body><main class="public-tool" id="archive"><span class="eyebrow">Academic archive</span><h1>Loading the record…</h1><p id="intro"></p><div class="archive-events" id="events"></div></main><script>
-(function(){var api=window.NSS_API_ROOT||(location.hostname==='localhost'&&location.port!=='4000'?'http://localhost:4000/api/v1':'/api/v1'),slug=new URLSearchParams(location.search).get('year'),root=document.getElementById('archive');if(!slug){root.innerHTML='<h1>Choose an academic year.</h1>';return}fetch(api+'/public/academic-years/'+encodeURIComponent(slug)).then(function(r){if(!r.ok)throw Error();return r.json()}).then(function(body){var y=body.year;document.title=y.label+' Archive — NSS IIIT Naya Raipur';root.querySelector('h1').textContent=y.label;document.getElementById('intro').textContent='Published events and community galleries from this academic year.';document.getElementById('events').innerHTML=y.events.map(function(e){return '<article class="archive-event">'+(e.cover&&e.cover.url?'<img src="'+e.cover.url+'" alt="'+(e.cover.altText||e.title)+'">':'')+'<span class="eyebrow">'+e.category+' · '+new Date(e.startAt).toLocaleDateString('en-IN')+'</span><h2>'+e.title+'</h2><p>'+e.summary+'</p><a href="event.html?slug='+encodeURIComponent(e.slug)+'" class="text-link">View event →</a></article>'}).join('')||'<p>No published events in this archive.</p>'}).catch(function(){root.innerHTML='<h1>Archive unavailable.</h1><p>This academic year may be private or unpublished.</p>'})})();
-</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0F1712">
+  <title>Academic Year — NSS IIIT Naya Raipur</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/public-pages.css">
+</head>
+<body class="public-page-body">
+  <a class="skip-link" href="#main">Skip to archive</a>
+  <header class="public-page-nav">
+    <a class="public-brand" href="index.html" aria-label="NSS IIIT Naya Raipur home">
+      <span class="public-brand-logos"><span class="public-emblem"><img src="assets/images/nss_logo.png" alt="NSS"></span><span class="public-emblem iiit"><img src="assets/images/iiit.png" alt="IIIT Naya Raipur"></span></span>
+      <span>NSS<small>IIIT Naya Raipur</small></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="index.html#about">About</a><a href="index.html#events">Events</a><a href="calendar.html">Calendar</a><a href="archives.html" aria-current="page">Archives</a><a href="team.html">Team</a><a href="index.html#join">Join us</a>
+    </nav>
+  </header>
+  <main class="public-tool" id="archive">
+    <section class="public-tool-hero"><span class="eyebrow">Academic archive</span><h1>Loading the record…</h1><p id="intro"></p></section>
+    <section class="public-tool-body"><div class="public-tool-body-inner"><div class="archive-events" id="events" aria-live="polite"></div></div></section>
+  </main>
+  <footer class="public-page-footer"><a href="archives.html">← All academic archives</a></footer>
+  <script src="js/public-data.js"></script>
+</body>
+</html>

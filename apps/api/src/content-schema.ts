@@ -15,3 +15,25 @@ const values = z.record(z.string(), z.string().max(20000)).superRefine((record, 
 export const metricSchema = z.object({ number: z.number().int().min(0), label: z.string().min(1).max(200), suffix: z.string().max(30), progress: z.number().min(0).max(1).nullable(), visible: z.boolean() });
 export const homepageSchema = z.object({ values, hiddenSections: z.array(z.enum(['top', 'about', 'impact', 'events', 'director', 'team', 'join', 'credits'])).default([]), metrics: z.array(metricSchema).max(30), navigation: z.array(z.object({ label: z.string().min(1).max(50), url: safeUrl })).max(14), socials: z.array(z.object({ label: z.string().min(1).max(40), url: safeUrl })).max(12), steps: z.array(z.object({ title: z.string().max(120), text: z.string().max(2000) })).max(12), mobileHero: imageUrl.or(z.literal('')).default(''), focalX: z.number().min(0).max(100).default(50), focalY: z.number().min(0).max(100).default(50), accent: z.enum(['marigold', 'moss', 'rust']).default('marigold'), visible: z.boolean().default(true), canonicalPath: z.string().regex(/^\/(?:index\.html)?$/).default('/'), shareImage: imageUrl.or(z.literal('')).default(''), favicon: imageUrl.or(z.literal('')).default('') });
 export type Homepage = z.infer<typeof homepageSchema>;
+
+const requiredValueKeys = ['hero.motto', 'hero.title', 'hero.body', 'hero.image', 'hero.primaryLabel', 'hero.primaryUrl', 'about.title', 'about.lead', 'about.body', 'director.name', 'director.designation', 'director.text', 'join.title', 'join.copy', 'contact.email', 'seo.title', 'seo.description'] as const;
+
+export function parseHomepageContent(input: unknown) {
+  const homepage = homepageSchema.parse(input);
+  for (const key of requiredValueKeys) {
+    if (!homepage.values[key]?.trim()) throw new z.ZodError([{ code: 'custom', path: ['values', key], message: `Homepage field ${key} is required.` }]);
+  }
+  return homepage;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Merge editor patches into the last complete revision before validation. */
+export function mergeHomepageContent(base: unknown, patch: unknown) {
+  if (!isRecord(base) || !isRecord(patch)) return patch;
+  const output: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) output[key] = isRecord(value) && isRecord(base[key]) ? mergeHomepageContent(base[key], value) : value;
+  return output;
+}

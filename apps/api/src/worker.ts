@@ -24,7 +24,15 @@ async function runJob() {
   try {
     if (job.type === 'EVENT_PUBLISH' && typeof (job.payload as { eventId?: unknown }).eventId === 'string') await publishScheduledEvent((job.payload as { eventId: string }).eventId);
     else if (job.type === 'GALLERY_RELEASE' && typeof (job.payload as { eventId?: unknown }).eventId === 'string') await releasePhotos((job.payload as { eventId: string }).eventId);
-    else if (job.type === 'SITE_PUBLISH' && typeof (job.payload as { revisionId?: unknown }).revisionId === 'string') await prisma.$transaction(async (tx) => { const revisionId = (job.payload as { revisionId: string }).revisionId; const revision = await tx.siteRevision.findUniqueOrThrow({ where: { id: revisionId } }); await tx.siteRevision.updateMany({ where: { key: revision.key, status: 'PUBLISHED' }, data: { status: 'ARCHIVED' } }); await tx.siteRevision.update({ where: { id: revisionId }, data: { status: 'PUBLISHED', publishedAt: new Date(), scheduledAt: null } }); });
+    else if (job.type === 'SITE_PUBLISH' && typeof (job.payload as { revisionId?: unknown }).revisionId === 'string') await prisma.$transaction(async (tx) => {
+      const revisionId = (job.payload as { revisionId: string }).revisionId;
+      const revision = await tx.siteRevision.findUnique({ where: { id: revisionId } });
+      if (!revision || revision.key !== 'homepage' || revision.status !== 'SCHEDULED' || !revision.scheduledAt || revision.scheduledAt > new Date()) return;
+      const newer = await tx.siteRevision.findFirst({ where: { key: revision.key, status: 'SCHEDULED', version: { gt: revision.version } }, orderBy: { version: 'desc' } });
+      if (newer) return;
+      await tx.siteRevision.updateMany({ where: { key: revision.key, status: 'PUBLISHED' }, data: { status: 'ARCHIVED' } });
+      await tx.siteRevision.update({ where: { id: revisionId }, data: { status: 'PUBLISHED', publishedAt: new Date(), scheduledAt: null } });
+    });
     else throw new Error(`Unsupported scheduled job type: ${job.type}`);
     await prisma.scheduledJob.update({ where: { id: job.id }, data: { status: 'SUCCEEDED', lockedAt: null, lastError: null } });
     logger.info({ jobId: job.id, type: job.type }, 'scheduled job completed');

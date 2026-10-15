@@ -1,10 +1,14 @@
 # NSS IIIT Naya Raipur: repository audit and migration map
 
-Audit performed before application changes on 2026-10-10.
+Baseline audit performed before application changes on 2026-10-10. Follow-up
+release-blocker audit and repair pass performed on 2026-10-12.
 
 ## Current repository
 
-The supplied project is a handcrafted, dependency-free static website. It has no package manifest, build step, database, API, authentication, upload handling, or server-side runtime. It is intended to be opened directly or served by a static file server.
+The supplied public source was a handcrafted, dependency-free static website.
+The repository now contains the preserved source plus the TypeScript workspace,
+PostgreSQL/Prisma API, worker, management web app, and native Flutter Android
+client described below.
 
 | Area | Current state | Migration treatment |
 | --- | --- | --- |
@@ -83,7 +87,8 @@ Use a small TypeScript monorepo with:
 2. A Vite React/TypeScript management app (`apps/admin-web`) served at `/manage/` in production and port 5173 in development. It has shared authenticated shell, role-aware navigation, dashboard, event/calendar, upload, moderation, content, team, archive, audit, and settings views.
 3. A persistent worker (`apps/api/src/worker.ts`) that claims due `ScheduledJob` rows with a database lock, performs idempotent publication, retries failures, and survives restarts.
 4. Local filesystem storage under a configurable private root outside the public web root. Sharp generates JPEG/WebP derivatives and deterministic dHash/blur/resolution warnings. Public media is served from a controlled route after publication.
-5. The existing static site stays in the repository and remains the visual source of truth. `public-cms.js` progressively hydrates homepage/team/event data and leaves static content available if the API is down. `event.html` is the dynamic template for new database events.
+5. A native Flutter Android client in `apps/mobile/` uses short-lived bearer access tokens, rotating hashed refresh sessions, Riverpod, go_router, Dio, image_picker, secure storage, cached thumbnails, and background_downloader. It consumes the same API and role rules as the web client.
+6. The existing static site stays in the repository and remains the visual source of truth. `public-cms.js` progressively hydrates homepage/team/event data and leaves static content available if the API is down. `event.html` is the dynamic template for new database events.
 
 PostgreSQL is intentionally internal to Compose/production networking. Nginx is documented as an additive reverse-proxy snippet so existing host sites are backed up and untouched.
 
@@ -94,7 +99,7 @@ PostgreSQL is intentionally internal to Compose/production networking. Nginx is 
 - **Untrusted images:** uploads are streamed to a private temporary file, checked by signature and sharp decode, re-encoded, hashed, and stored with random names.
 - **Moderation leaks:** public queries filter event publication and `PUBLISHED` submission state; private preview endpoints require an approver/admin and never expose raw paths.
 - **Scheduler restart loss:** jobs are persistent rows with retry/lease fields, not timers.
-- **No Docker daemon in the current WSL session:** application/unit/type checks can run locally; PostgreSQL/Playwright/integration checks are documented and will be run when services are available. The Compose files remain the reproducible target.
+- **No Docker/Flutter/Android tools in the current WSL session:** Node API/web checks and the embedded PostgreSQL integration runner run locally. Compose, Mailpit, Flutter package resolution, emulator/device checks, and APK generation remain explicitly environment-dependent checks.
 
 ## Implementation milestones
 
@@ -102,4 +107,4 @@ PostgreSQL is intentionally internal to Compose/production networking. Nginx is 
 2. Add public API, scheduler, event/team/content/admin routes, and dynamic public template/hydration.
 3. Add responsive management app with real API flows, upload progress, moderation, calendar, archives, and role-aware controls.
 4. Add Compose, Nginx, backup/restore, deployment/operations docs and migration checks.
-5. Run unit/type/lint/build checks, then run database/integration/E2E suites when PostgreSQL and browser dependencies are available.
+5. Add the mobile client and run unit/type/lint/build checks, then run database/integration/browser/device suites when the corresponding services and SDKs are available.

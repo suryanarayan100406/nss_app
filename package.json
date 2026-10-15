@@ -11,6 +11,7 @@
     "dev:web": "npm --workspace apps/admin-web run dev",
     "start:api": "npm --workspace apps/api run start",
     "start:worker": "npm --workspace apps/api run start:worker",
+    "dev:worker": "npm --workspace apps/api run dev:worker",
     "build": "npm run build:api && npm run build:web",
     "build:api": "npm --workspace apps/api run build",
     "build:web": "npm --workspace apps/admin-web run build",
@@ -25,7 +26,12 @@
     "db:seed": "npm --workspace apps/api run seed",
     "db:admin": "npm --workspace apps/api run create-admin",
     "import:static": "npm --workspace apps/api run import-static",
-    "test:e2e": "npm --workspace apps/admin-web run test:e2e"
+    "test:e2e": "npm --workspace apps/admin-web run test:e2e",
+    "mobile:get": "flutter pub get --directory apps/mobile",
+    "mobile:format": "dart format apps/mobile/lib apps/mobile/test",
+    "mobile:analyze": "flutter analyze apps/mobile --no-fatal-infos",
+    "mobile:test": "cd apps/mobile && flutter test",
+    "mobile:apk": "cd apps/mobile && flutter build apk --debug --dart-define=NSS_API_BASE_URL=http://10.0.2.2:4000/api/v1 --target-platform android-arm64"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",

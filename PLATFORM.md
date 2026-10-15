@@ -41,11 +41,15 @@ npm run test:e2e                                    # requires Playwright browse
 docker compose -f compose.yml logs -f api worker    # inspect API/scheduler logs
 ```
 
+The Compose management service sets `VITE_PROXY_TARGET=http://api:4000` so the
+management app also works directly at `http://localhost:5173/manage/` from the
+host. Outside Compose, Vite defaults to `http://localhost:4000`.
+
 For a local demo account, pass `SEED_DEMO_PASSWORD` only to the seed command: `docker compose -f compose.yml exec -e SEED_DEMO_PASSWORD='local-only-long-password' api npm run db:seed`. This creates `demo.student@iiitnr.edu.in` and `demo.approver@iiitnr.edu.in` as verified local-only accounts. No demo password or student data is stored in the repository.
 
 ## Authentication and roles
 
-Registration accepts only the exact case-insensitive domain `iiitnr.edu.in`; the server uses a boundary-aware regular expression and does not trust the browser. Verification and password reset tokens are hashed in the database. Sessions use random HttpOnly cookies, SameSite=Lax, a server-side session row, Argon2id password hashes, CSRF double-submit protection, Helmet, rate limiting, and audit entries for logins and sensitive operations.
+Registration accepts only the exact case-insensitive domain `iiitnr.edu.in`; the server uses a boundary-aware regular expression and does not trust the browser. The web client exposes `/manage/verify-email`, `/manage/forgot-password`, and `/manage/reset-password`; verification and password-reset tokens are hashed, single-use, and delivered through the configured management origin. Sessions use random HttpOnly cookies, SameSite=Lax, a server-side session row, Argon2id password hashes, CSRF double-submit protection, Helmet, rate limiting, and audit entries for logins and sensitive operations.
 
 Create the first admin after the database is ready:
 
@@ -55,6 +59,47 @@ docker compose -f compose.yml exec -e ADMIN_EMAIL=admin@iiitnr.edu.in -e ADMIN_N
 
 The command marks the account verified for bootstrap and is idempotent. It does not ship a production credential. Admins assign `APPROVER` or `ADMIN` in **Settings & audit**; users cannot escalate themselves, and approvers cannot decide on their own photo.
 
+## Flutter Android client
+
+The native client lives in `apps/mobile/`. It uses the same API, event records,
+roles and moderation rules as the web application. It stores only short-lived
+access and rotating refresh credentials in Android secure storage. It does not
+embed the management website.
+
+Install Flutter stable and Android Studio/SDK using the [official Android setup
+guide](https://docs.flutter.dev/platform-integration/android/setup), then run:
+
+```bash
+flutter doctor
+npm run mobile:get
+npm run mobile:format
+npm run mobile:analyze
+npm run mobile:test
+npm run mobile:apk
+```
+
+Run against local Compose API:
+
+```bash
+flutter run --target apps/mobile/lib/main.dart \
+  --dart-define=NSS_API_BASE_URL=http://10.0.2.2:4000/api/v1
+```
+
+`10.0.2.2` is the Android emulator bridge to the development host. On a
+physical device, use the host's trusted LAN IP and allow only the development
+port through the host firewall, or use `adb reverse tcp:4000 tcp:4000` and
+`http://127.0.0.1:4000/api/v1`. Production builds must use the HTTPS Nginx
+origin. Android's photo picker lost-data recovery runs at startup, and the
+upload queue uses `background_downloader`; an OS force-stop can still terminate
+background work and the app will require a retry.
+
+Native mobile auth endpoints are `/api/v1/auth/mobile/login`,
+`/api/v1/auth/mobile/refresh`, and `/api/v1/auth/mobile/logout`. Access tokens
+expire quickly; refresh tokens are rotated, hashed in `MobileSession`, and
+reuse of a revoked token family invalidates the family. The normal API routes
+accept the same bearer credential and enforce the same ownership and role
+checks as browser sessions.
+
 ## Photo workflow test
 
 1. Register a local `@iiitnr.edu.in` address, open the verification URL from Mailpit, and sign in.
@@ -63,6 +108,8 @@ The command marks the account verified for bootstrap and is idempotent. It does 
 4. Sign in as the approver account. Open **Review queue**, inspect a large private preview, warning context, and uploader. Rejecting requires a reason; approving your own item is server-denied.
 5. Approve one photo while its event is published. The worker/public-media path creates a rotated, resized WebP derivative with metadata removed and the gallery API lists it immediately. Approve a photo against a draft/scheduled event to verify it remains `APPROVED` and private until event publication.
 6. Submit an exact duplicate, malformed file, unsupported extension/content, oversized image, and a small image to verify the actionable per-file responses. The unit tests cover these deterministic checks.
+
+The admin participant manager is available at `/manage/admin/events/:id/participants`; it supports manual add/edit/remove, CSV import and CSV export through the same authenticated API. The local worker runs from the source watcher, while the production image builds `apps/api/dist` before starting the persistent worker. Backup status reads the latest timestamped backup directory under `BACKUP_ROOT` when that directory is mounted read-only into the API container; it does not claim that a backup exists when no marker directory is present.
 
 Upload defaults are 15 MiB per file, 30 files per batch, 40 million pixels, and a recommended 800×600 minimum. Change them in `.env` or production environment configuration. The API limits multipart processing and never holds the full batch in memory.
 
@@ -74,9 +121,18 @@ Upload defaults are 15 MiB per file, 30 files per batch, 40 million pixels, and 
 - For a fast scheduler test, create a schedule a few minutes in the future and watch `docker compose logs -f worker`. For a database-level restart test, stop/start the worker before the due time; the job row remains pending.
 - `/archives.html` lists published academic years and `/archive.html?year=2025-26` shows public events and galleries. Old data is not deleted during rollover.
 
+Homepage revisions are the canonical source for structured homepage copy and
+layout bindings. Impact metrics and the Director message retain normalized
+records for editing, audit and reuse; the public renderer merges those current
+records into the validated published homepage revision, so an edit cannot leave
+the public SSR output and `/api/v1/public/home` disagreeing. Partial editor
+payloads merge into the latest complete revision and are rejected if the full
+schema is still invalid. Publication validates the candidate before archiving
+the last-known-good revision atomically.
+
 ## Public compatibility and migration
 
-The original `index.html`, `team.html`, seven `event-*.html` URLs, supplied images, fonts, and bundled animation libraries remain in place. `js/public-cms.js` progressively hydrates the homepage/team/legacy event pages and quietly falls back to their authored content when the API is unreachable. New event records use `event.html?slug=...`; no new HTML file is required.
+The original `index.html`, `team.html`, seven `event-*.html` URLs, supplied images, fonts, and bundled animation libraries remain in place. `js/public-cms.js` progressively hydrates the homepage/team/legacy event pages and quietly falls back to their authored content when the API is unreachable. The API renderer also serves the source HTML when its database is unavailable, and the Nginx snippets intercept an unavailable API for those public HTML routes and serve the same files directly. New event records use `event.html?slug=...`; no new HTML file is required.
 
 Run the importer repeatedly without duplicate events, team members, galleries, or participant rows:
 
@@ -157,4 +213,4 @@ The restore script verifies checksums and requires an explicit confirmation. Dat
 
 ## Verification status in this environment
 
-Passed locally: Prisma schema validation and migrations, API and management TypeScript checks, both ESLint runs, API and management production builds, 10 unit tests covering domain email policy, role ordering, academic-year/publication/self-review policy, exact/near image hashes, corrupted/unsupported files, and low-resolution warnings, the isolated embedded-PostgreSQL migration/import/API/SSR integration runner, 12 Playwright public/management smoke journeys, `bash -n` backup/restore script validation, and `npm audit --omit=dev --audit-level=high` with 0 vulnerabilities. Docker Compose startup, Mailpit delivery, and an actual Docker-volume backup/restore run remain deployment-environment checks because this WSL session has no Docker daemon; run `docker compose -f compose.yml up --build` on Docker Desktop/Linux before production deployment.
+Passed in this workspace: Prisma schema validation and migrations, API and management TypeScript checks, both ESLint runs, API and management production builds, 12 API/media/content unit tests, the isolated embedded-PostgreSQL migration/import/API/SSR integration runner including ICS, mobile bearer/refresh-reuse checks, and verification redirect checks, 32 Playwright public/recovery/participant-management journeys across desktop and mobile Chromium, `bash -n` backup/restore script validation, and `npm audit --omit=dev --audit-level=high` with 0 vulnerabilities. Docker Compose was also rebuilt and started with API, worker, PostgreSQL, Mailpit, Nginx and Vite management services; `/health`, `/ready`, direct Vite-to-API proxying, Mailpit verification-mail delivery, worker startup, and Nginx static fallback while the API was stopped were checked. The Windows Flutter toolchain was then verified with dependency resolution, formatting, widget tests, and a debug Android APK build at `apps/mobile/build/app/outputs/flutter-apk/app-debug.apk`. `flutter analyze` now has no parse errors but reports existing informational lint findings; a physical-device runtime smoke test and an actual database/media backup-and-restore drill remain unrun.

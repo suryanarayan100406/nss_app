@@ -15,11 +15,16 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const headers = new Headers(options.headers);
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   if (method !== 'GET' && csrf) headers.set('X-CSRF-Token', csrf);
-  const response = await fetch(`${apiRoot}${path}`, { ...options, headers, credentials: 'include' });
+  let response = await fetch(`${apiRoot}${path}`, { ...options, headers, credentials: 'include' });
+  if (response.status === 403 && method !== 'GET' && (await response.clone().json().catch(() => null))?.error?.code === 'CSRF_REQUIRED') {
+    csrf = null;
+    await getCsrf();
+    if (csrf) headers.set('X-CSRF-Token', csrf);
+    response = await fetch(`${apiRoot}${path}`, { ...options, headers, credentials: 'include' });
+  }
   const text = await response.text();
   const body = text ? JSON.parse(text) as T & { error?: { message?: string } } : undefined;
   if (!response.ok) {
-    if (response.status === 403 && method !== 'GET') { csrf = null; await getCsrf(); }
     throw new Error(body?.error?.message || `Request failed (${response.status})`);
   }
   return body as T;

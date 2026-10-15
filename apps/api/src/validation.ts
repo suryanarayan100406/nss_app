@@ -43,6 +43,9 @@ export const eventSchema = z.object({
   academicYearId: z.string().cuid().nullable().optional(),
   seoTitle: z.string().trim().max(180).nullable().optional(),
   seoDescription: z.string().trim().max(320).nullable().optional(),
+}).superRefine((event, ctx) => {
+  if (event.endAt && event.endAt <= event.startAt) ctx.addIssue({ code: 'custom', path: ['endAt'], message: 'End time must be after the start time.' });
+  if (event.uploadOpensAt && event.uploadClosesAt && event.uploadClosesAt <= event.uploadOpensAt) ctx.addIssue({ code: 'custom', path: ['uploadClosesAt'], message: 'Upload closing time must be after opening time.' });
 });
 
 export const moderationSchema = z.object({

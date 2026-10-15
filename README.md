@@ -2,7 +2,7 @@
 
 The original static website is preserved as the public visual source and legacy URL fallback. A self-hosted TypeScript/PostgreSQL CMS, management app, scheduled worker, and moderated community photo workflow now live alongside it. Use [`PLATFORM.md`](PLATFORM.md) for the full Docker-based application; the static commands below remain useful for the offline public fallback.
 
-Start with [`AUDIT.md`](AUDIT.md) for the content inventory/migration map and [`PLATFORM.md`](PLATFORM.md) for architecture, local setup, testing, deployment, backups, and operations.
+Start with [`AUDIT.md`](AUDIT.md) for the content inventory/migration map, [`PLATFORM.md`](PLATFORM.md) for architecture/local setup/testing/deployment, [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md) for app UI rules, and [`apps/mobile/README.md`](apps/mobile/README.md) for Flutter Android setup.
 
 The public fallback is a static site (HTML + CSS + JS). It needs no build step, CDN, or internet
 (fonts and animation libraries are bundled). Only the Instagram preview pop-up needs internet.

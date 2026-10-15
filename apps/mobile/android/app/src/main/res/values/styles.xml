@@ -1,0 +1,15 @@
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F5F1E4</item>
+        <item name="android:navigationBarColor">#F5F1E4</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F5F1E4</item>
+        <item name="android:navigationBarColor">#F5F1E4</item>
+    </style>
+</resources>

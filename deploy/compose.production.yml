@@ -13,9 +13,9 @@ services:
     build: { context: .., dockerfile: apps/api/Dockerfile }
     restart: unless-stopped
     env_file: [/srv/nss-app/.env.production]
-    environment: { PORT: "4000", NODE_ENV: production, PRIVATE_MEDIA_ROOT: /data/private-media, PUBLIC_MEDIA_ROOT: /data/public-media }
+    environment: { PORT: "4000", NODE_ENV: production, PRIVATE_MEDIA_ROOT: /data/private-media, PUBLIC_MEDIA_ROOT: /data/public-media, BACKUP_ROOT: /var/backups/nss }
     ports: ["127.0.0.1:4000:4000"]
-    volumes: ["/var/lib/nss-media:/data"]
+    volumes: ["/var/lib/nss-media:/data", "/var/backups/nss:/var/backups/nss:ro"]
     command: sh -c "npm run db:migrate && npm run start:api"
     depends_on: { db: { condition: service_healthy } }
   worker:

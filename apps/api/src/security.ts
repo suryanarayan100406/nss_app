@@ -36,6 +36,10 @@ export function ensureCsrfCookie(req: Request, res: Response, next: NextFunction
 
 export function requireCsrf(req: Request, _res: Response, next: NextFunction) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  // Exempt only authenticated bearer requests and cookie-free native auth.
+  // A dummy Authorization header must not bypass protection for a cookie session.
+  if (!req.sessionId && req.mobileSessionId) return next();
+  if (!req.cookies?.[config.SESSION_COOKIE] && req.path.startsWith('/auth/mobile/')) return next();
   const origin = req.get('origin');
   if (origin && ![config.PUBLIC_ORIGIN, config.MANAGE_ORIGIN].includes(origin)) return next(new HttpError(403, 'ORIGIN_INVALID', 'Origin not allowed.'));
   const cookieToken = req.cookies?.[config.CSRF_COOKIE];
